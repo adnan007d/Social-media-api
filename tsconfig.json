@@ -44,7 +44,7 @@
 		"noFallthroughCasesInSwitch": true,
 		"noUncheckedIndexedAccess": true, // Depends on you
 		"noImplicitOverride": true,
-		"noPropertyAccessFromIndexSignature": true,
+		"useUnknownInCatchVariables": true,
 
 		/* Completeness */
 		"skipLibCheck": true

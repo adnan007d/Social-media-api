@@ -1,16 +1,13 @@
-function* fibo() {
-	let a = 0;
-	let b = 1;
-	while (true) {
-		yield a;
-		const t = a;
-		a = b;
-		b = t + b;
-	}
+import app from "@/app";
+import env from "@/env";
+import { dbCleanup } from "./db";
+
+async function main() {
+	app.listen(env.PORT, () => console.log(`Listening on port ${6969}`));
 }
-const fiboGen = fibo();
-console.log(fiboGen.next().value);
-console.log(fiboGen.next().value);
-console.log(fiboGen.next().value);
-console.log(fiboGen.next().value);
-console.log(fiboGen.next().value);
+
+main().catch((error) => {
+	console.error(error);
+	dbCleanup();
+	process.exit(1);
+});
