@@ -8,7 +8,9 @@
 		"dev": "tsx watch src/index.ts",
 		"build": "tsc && tsc-alias",
 		"lint": "prettier --check . && eslint .",
-		"format": "prettier --write ."
+		"format": "prettier --write .",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate": "drizzle-kit migrate"
 	},
 	"keywords": [],
 	"author": "",
