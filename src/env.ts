@@ -15,13 +15,15 @@ const envSchema = z.object({
 		.min(32, "JWT_ACCESS_TOKEN_SECRET must be at least 32 characters"),
 	JWT_REFRESH_TOKEN_SECRET: z
 		.string()
-		.min(32, "JWT_REFRESH_TOKEN_SECRET is required and must be at least 32 characters")
+		.min(32, "JWT_REFRESH_TOKEN_SECRET is required and must be at least 32 characters"),
+
+	LOG_FILE: z.string().default("logs.log")
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
 
 if (parsedEnv.error) {
-	console.log(parsedEnv.error.errors);
+	console.error(parsedEnv.error.errors);
 	process.exit(1);
 }
 

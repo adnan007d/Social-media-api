@@ -1,4 +1,5 @@
 import env from "@/env";
+import * as schema from "@/db/schema";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
@@ -11,7 +12,7 @@ const sql = postgres({
 	password: env.DB_PASS
 });
 
-const db = drizzle(sql);
+const db = drizzle(sql, { schema });
 
 /**
  * Close the database connection

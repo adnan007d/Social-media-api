@@ -10,7 +10,6 @@
 
 		/* Modules */
 		"module": "nodenext",
-		"rootDir": "./src",
 		"moduleResolution": "nodenext",
 		"paths": {
 			"@/*": ["src/*"]
@@ -27,7 +26,6 @@
 		"baseUrl": "./",
 		"outDir": "./dist",
 
-		"singleQuote": false,
 		/* Interop Constraints */
 		"allowSyntheticDefaultImports": true,
 		"esModuleInterop": true,
@@ -49,5 +47,5 @@
 		/* Completeness */
 		"skipLibCheck": true
 	},
-	"include": ["src/**/*.ts"]
+	"include": ["src/**/*.ts", "tests/**/*.ts"]
 }

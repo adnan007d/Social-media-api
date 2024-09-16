@@ -7,9 +7,23 @@ export default tseslint.config(
 	...tseslint.configs.recommended,
 	prettier,
 	{
-		ignores: ["node_modules/", "dist/"],
+		ignores: ["node_modules/", "dist/"]
+	},
+	{
 		rules: {
-			"@typescript-eslint/no-namespace": "off"
+			"@typescript-eslint/no-namespace": "off",
+			"@typescript-eslint/no-unused-vars": [
+				"error",
+				{
+					argsIgnorePattern: "^_",
+					varsIgnorePattern: "^_",
+					caughtErrorsIgnorePattern: "^_"
+				}
+			],
+			"@typescript-eslint/consistent-type-imports": [
+				"error",
+				{ prefer: "type-imports", fixStyle: "inline-type-imports" }
+			]
 		}
 	}
 );

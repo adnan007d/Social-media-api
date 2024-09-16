@@ -8,6 +8,13 @@
       "when": 1726421716312,
       "tag": "0000_light_edwin_jarvis",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1726474878126,
+      "tag": "0001_third_mastermind",
+      "breakpoints": true
     }
   ]
 }
