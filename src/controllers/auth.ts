@@ -1,7 +1,8 @@
 import db from "@/db";
-import { refreshTokensTable, usersTable } from "@/db/schema";
+import { usersTable } from "@/db/schema";
 import { generateAccessToken, generateRefreshToken } from "@/util/jwt";
 import logger from "@/util/logger";
+import { dbQueue } from "@/util/queue";
 import { APIError, comparePassword, hashPassword } from "@/util/util";
 import { signInSchema, type SignUpBody } from "@/util/validations";
 import { eq } from "drizzle-orm";
@@ -52,7 +53,7 @@ export async function signIn(req: Request, res: Response, next: NextFunction) {
 		const parsedBody = signInSchema.safeParse(req.body);
 
 		if (!parsedBody.success) {
-			logger.error("Validation error");
+			logger.error({ err: parsedBody.error }, "Validation error");
 			throw new APIError(401, "Invalid email/password");
 		}
 		const body = parsedBody.data;
@@ -68,15 +69,16 @@ export async function signIn(req: Request, res: Response, next: NextFunction) {
 		});
 
 		if (!user) {
-			logger.error(body.email, "User not found");
+			logger.error({ err: body.email }, "User not found");
 			throw new APIError(401, "Invalid email/password");
 		}
 
 		if (!(await comparePassword(body.password, user.password))) {
-			logger.error(body.email, "Invalid password");
+			logger.error({ err: body.email }, "Invalid password");
 			throw new APIError(401, "Invalid email/password");
 		}
 
+		// Generating access token and refresh token
 		const [tokenSettled, refreshTokenSettled] = await Promise.allSettled([
 			generateAccessToken({ id: user.id, role: user.role }),
 			generateRefreshToken({ id: user.id, role: user.role })
@@ -89,14 +91,20 @@ export async function signIn(req: Request, res: Response, next: NextFunction) {
 		const accessToken = tokenSettled.value;
 		const refreshToken = refreshTokenSettled.value;
 
-		await db
-			.insert(refreshTokensTable)
-			.values({
-				user_id: user.id,
-				refresh_token: refreshToken,
-				device: req.headers["user-agent"] ?? null
-			})
-			.execute();
+		// Getting old refresh token from cookie if present
+		// Rotating refresh token in db
+		const oldRefreshToken = req.cookies.refreshToken;
+
+		dbQueue
+			.createJob([
+				{
+					refresh_token: refreshToken,
+					user_id: user.id,
+					device: req.headers["user-agent"] ?? null
+				},
+				oldRefreshToken
+			])
+			.save();
 
 		res.cookie("refreshToken", refreshToken, {
 			httpOnly: true,

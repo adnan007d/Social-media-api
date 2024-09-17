@@ -16,8 +16,6 @@ function getDestination(NODE_ENV: string) {
 	}
 }
 
-console.log(env.NODE_ENV);
-
 const logger = pino(
 	pretty({
 		sync: env.NODE_ENV === "test",

@@ -1,10 +1,12 @@
 import app from "@/app";
 import inject from "light-my-request";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { generateEmail, generateUsername, testPassword } from "./testUtil";
 import db from "@/db";
-import { usersTable } from "@/db/schema";
-import { sql } from "drizzle-orm";
+import { refreshTokensTable, usersTable } from "@/db/schema";
+import { eq, sql, ne } from "drizzle-orm";
+import { SignJWT } from "jose";
+import env from "@/env";
 
 describe("auth signup", () => {
 	it("empty body", async () => {
@@ -192,6 +194,152 @@ describe("auth signin", () => {
 				expect(res.cookies.filter((cookie) => cookie.name === "refreshToken")[0]?.value).toBeTypeOf(
 					"string"
 				);
+			});
+	});
+});
+
+describe("check authentication", () => {
+	let user: { email: string; password: string; id: string };
+	let accessToken: string;
+	let refreshToken: string;
+	beforeEach(async () => {
+		const result = await db
+			.select({
+				email: usersTable.email,
+				password: usersTable.password,
+				id: usersTable.id
+			})
+			.from(usersTable)
+			.orderBy(sql`RANDOM()`)
+			.limit(1)
+			.execute();
+		if (!result[0]) {
+			throw new Error("No user found");
+		}
+		user = result[0];
+		const { json } = await inject(app)
+			.post("/auth/signin")
+			.body({ email: user.email, password: testPassword });
+		accessToken = json().accessToken;
+		refreshToken = json().refreshToken;
+	});
+	it("successful", async () => {
+		const email = user.email;
+		await inject(app)
+			.get("/users/me")
+			.headers({ Authorization: `Bearer ${accessToken}` })
+			.then((res) => {
+				expect(res.statusCode).toBe(200);
+				expect(res.json().email).toBe(email);
+			});
+	});
+
+	it("invalid access token", async () => {
+		await inject(app)
+			.get("/users/me")
+			.headers({ Authorization: `Bearer invalid-access-token` })
+			.then((res) => {
+				expect(res.statusCode).toBe(401);
+				expect(res.json().message).toBe("Unauthorized");
+			});
+	});
+
+	it("invalid access token valid refresh token", async () => {
+		await inject(app)
+			.get("/users/me")
+			.headers({ Authorization: `Bearer invalid-access-token` })
+			.cookies({ refreshToken })
+			.then((res) => {
+				expect(res.statusCode).toBe(401);
+				expect(res.json().message).toBe("Unauthorized");
+			});
+	});
+
+	it("expired access token but valid refresh token", async () => {
+		const expiredToken = await new SignJWT({ id: user.id, role: "user" })
+			.setProtectedHeader({ alg: "HS256" })
+			.setExpirationTime("1s")
+			.sign(new TextEncoder().encode(env.JWT_ACCESS_TOKEN_SECRET));
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+		await inject(app)
+			.get("/users/me")
+			.headers({ Authorization: `Bearer ${expiredToken}` })
+			.cookies({ refreshToken })
+			.then((res) => {
+				expect(res.statusCode).toBe(200);
+				expect(res.json().id).toBe(user.id);
+			});
+	});
+
+	it("expired access token and invalid/expired refresh token", async () => {
+		const expiredToken = await new SignJWT({ id: user.id, role: "user" })
+			.setProtectedHeader({ alg: "HS256" })
+			.setExpirationTime("1s")
+			.sign(new TextEncoder().encode(env.JWT_ACCESS_TOKEN_SECRET));
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+		await inject(app)
+			.get("/users/me")
+			.headers({ Authorization: `Bearer ${expiredToken}` })
+			.cookies({ refreshToken: "invalid-refresh-token" })
+			.then((res) => {
+				expect(res.statusCode).toBe(401);
+				expect(res.json().message).toBe("Unauthorized");
+			});
+	});
+
+	it("expired access token and valid refresh token but deleted from database", async () => {
+		const expiredToken = await new SignJWT({ id: user.id, role: "user" })
+			.setProtectedHeader({ alg: "HS256" })
+			.setExpirationTime("1s")
+			.sign(new TextEncoder().encode(env.JWT_ACCESS_TOKEN_SECRET));
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+
+		await db.delete(refreshTokensTable).where(eq(refreshTokensTable.refresh_token, refreshToken));
+
+		await inject(app)
+			.get("/users/me")
+			.headers({ Authorization: `Bearer ${expiredToken}` })
+			.cookies({ refreshToken })
+			.then((res) => {
+				expect(res.statusCode).toBe(401);
+				expect(res.json().message).toBe("Unauthorized");
+			});
+	});
+
+	it("[odd case] expired access token of user 1 and valid refreshToken of user 2", async () => {
+		const result = await db
+			.select({
+				email: usersTable.email,
+				password: usersTable.password,
+				id: usersTable.id
+			})
+			.from(usersTable)
+			.where(ne(usersTable.id, user.id))
+			.orderBy(sql`RANDOM()`)
+			.limit(1)
+			.execute();
+		if (!result[0]) {
+			throw new Error("No user found");
+		}
+		const user2 = result[0];
+
+		const expiredToken = await new SignJWT({ id: user.id, role: "user" })
+			.setProtectedHeader({ alg: "HS256" })
+			.setExpirationTime("1s")
+			.sign(new TextEncoder().encode(env.JWT_ACCESS_TOKEN_SECRET));
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+		const { json } = await inject(app)
+			.post("/auth/signin")
+			.body({ email: user2.email, password: testPassword });
+		const refreshToken2 = json().refreshToken;
+
+		await inject(app)
+			.get("/users/me")
+			.headers({ Authorization: `Bearer ${expiredToken}` })
+			.cookies({ refreshToken: refreshToken2 })
+			.then((res) => {
+				expect(res.statusCode).toBe(401);
+				expect(res.json().message).toBe("Unauthorized");
 			});
 	});
 });
