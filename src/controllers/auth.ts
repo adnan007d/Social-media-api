@@ -93,9 +93,16 @@ export async function signIn(req: Request, res: Response, next: NextFunction) {
 			.insert(refreshTokensTable)
 			.values({
 				user_id: user.id,
-				refresh_token: refreshToken
+				refresh_token: refreshToken,
+				device: req.headers["user-agent"] ?? null
 			})
 			.execute();
+
+		res.cookie("refreshToken", refreshToken, {
+			httpOnly: true,
+			sameSite: "lax",
+			secure: process.env.NODE_ENV === "production"
+		});
 
 		return res.status(200).json({
 			accessToken,

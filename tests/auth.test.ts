@@ -189,6 +189,9 @@ describe("auth signin", () => {
 				expect(res.statusCode).toBe(200);
 				expect(res.json().accessToken).toBeTypeOf("string");
 				expect(res.json().refreshToken).toBeTypeOf("string");
+				expect(res.cookies.filter((cookie) => cookie.name === "refreshToken")[0]?.value).toBeTypeOf(
+					"string"
+				);
 			});
 	});
 });
