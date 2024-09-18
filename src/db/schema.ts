@@ -1,13 +1,14 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { boolean, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const imageTypeEnum = pgEnum("image_type", ["profile", "post"]);
 
 export const imagesTable = pgTable("images", {
-	id: uuid("id").primaryKey(),
+	id: uuid("id").defaultRandom().primaryKey(),
 	type: imageTypeEnum("type").notNull(),
 	url: text("url").notNull(),
+	public_id: text("public_id").notNull(),
 	// ref_id is the id of the user or post or any future entity
 	ref_id: uuid("ref_id").notNull(),
 	created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -20,11 +21,18 @@ export const usersTable = pgTable("users", {
 	password: text("password").notNull(),
 	role: roleEnum("role").default("user").notNull(),
 	email_verified: boolean("email_verified").default(false),
-	profile_image: uuid("profile_image").references(() => imagesTable.id),
+	profile_image: uuid("profile_image").references(() => imagesTable.id, { onDelete: "set null" }),
 	username: text("username").notNull().unique(),
 	created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
+
+export const userRelations = relations(usersTable, ({ one }) => ({
+	image: one(imagesTable, {
+		fields: [usersTable.profile_image],
+		references: [imagesTable.ref_id]
+	})
+}));
 
 export const refreshTokensTable = pgTable("refresh_tokens", {
 	id: uuid("id").defaultRandom().primaryKey(),

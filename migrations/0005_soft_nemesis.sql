@@ -1,0 +1,1 @@
+ALTER TABLE "images" ADD COLUMN "public_id" text NOT NULL;

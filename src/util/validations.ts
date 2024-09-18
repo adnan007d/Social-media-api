@@ -29,3 +29,10 @@ export const signInSchema = z.object({
 });
 
 export type SignInBody = z.infer<typeof signInSchema>;
+
+export const usersUpdateSchema = z.object({
+	username: z.string().min(3).max(255).optional(),
+	profile_image_id: z.string().uuid("invalid profile image id").optional()
+});
+
+export type UserUpdateBody = z.infer<typeof usersUpdateSchema>;
