@@ -22,7 +22,8 @@ export async function getMe(req: Request, res: Response, next: NextFunction) {
 			})
 			.from(usersTable)
 			.where(eq(usersTable.id, reqUser.id))
-			.leftJoin(imagesTable, eq(imagesTable.id, usersTable.profile_image));
+			.leftJoin(imagesTable, eq(imagesTable.id, usersTable.profile_image))
+			.limit(1);
 
 		return res.json(user[0]);
 	} catch (error) {
@@ -36,55 +37,46 @@ export async function updateMe(req: Request, res: Response, next: NextFunction) 
 
 		const body = req.body as UserUpdateBody;
 
-		// Updating username first as It can lead to error due to unique constrtaint
+		const updates: Partial<typeof usersTable.$inferInsert> = {};
+
 		// If username exists update it
 		if (body.username) {
-			await db
-				.update(usersTable)
-				.set({
-					username: body.username
-				})
-				.where(eq(usersTable.id, user.id));
+			updates.username = body.username;
 		}
 
-		// No profile image to update return early
-		if (!req.file) {
-			return res.json({ username: body.username });
-		}
+		let imageUrl: string | undefined;
+		if (req.file) {
+			const image_id = body.profile_image_id;
+			const imageData = await uploadStream(req.file, {
+				public_id: "profile/" + user.id,
+				invalidate: true
+			});
 
-		let image_id = body.profile_image_id;
-		const imageData = await uploadStream(req.file, {
-			public_id: "profile/" + user.id,
-			invalidate: true
-		});
-
-		// If image record is not present create it
-		// Update the user record as well
-		if (!image_id && imageData) {
-			const image = await db
-				.insert(imagesTable)
-				.values({
-					public_id: imageData.public_id,
-					url: imageData.url,
-					ref_id: user.id,
-					type: "profile"
-				})
-				.returning({
-					id: imagesTable.id
-				});
-			image_id = image[0]?.id;
-
-			await db
-				.update(usersTable)
-				.set({
-					profile_image: image_id!
-				})
-				.where(eq(usersTable.id, user.id));
+			// If image record is not present create it
+			// Update the user record as well
+			if (!image_id && imageData) {
+				const [image] = await db
+					.insert(imagesTable)
+					.values({
+						public_id: imageData.public_id,
+						url: imageData.url,
+						ref_id: user.id,
+						type: "profile"
+					})
+					.returning({
+						id: imagesTable.id
+					});
+				imageUrl = imageData.url;
+				if (image) {
+					updates.profile_image = image.id;
+				}
+			}
+			await db.update(usersTable).set(updates).where(eq(usersTable.id, user.id));
 		}
 
 		return res.json({
 			username: body.username,
-			imageUrl: imageData?.url
+			imageUrl: imageUrl
 		});
 	} catch (error) {
 		logger.error(error);
