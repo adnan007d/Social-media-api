@@ -20,9 +20,6 @@ declare module "express" {
 			role: string;
 		};
 	}
-	export interface AuthenticatedRequest extends Request {
-		user: NonNullable<Request["user"]>;
-	}
 }
 
 export async function authenticate(req: Request, res: Response, next: NextFunction) {
@@ -100,7 +97,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 			.save();
 
 		res.setHeader("Authorization", `Bearer ${newAccessToken}`);
-		res.cookie("refreshToken", refreshToken, {
+		res.cookie("refreshToken", newRefreshToken, {
 			httpOnly: true,
 			sameSite: "lax",
 			secure: process.env.NODE_ENV === "production"
