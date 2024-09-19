@@ -12,7 +12,7 @@ const sql = postgres({
 	password: env.DB_PASS
 });
 
-const db = drizzle(sql, { schema });
+const db = drizzle(sql, { schema, logger: env.NODE_ENV === "development" });
 
 /**
  * Close the database connection

@@ -1,6 +1,6 @@
 import db from "@/db";
 import { usersTable } from "@/db/schema";
-import { generateAccessToken, generateRefreshToken } from "@/util/jwt";
+import { generateTokens } from "@/util/jwt";
 import logger from "@/util/logger";
 import { dbQueue } from "@/util/queue";
 import { APIError, comparePassword, hashPassword } from "@/util/util";
@@ -50,61 +50,18 @@ export async function signUp(req: Request, res: Response, next: NextFunction) {
 
 export async function signIn(req: Request, res: Response, next: NextFunction) {
 	try {
-		const parsedBody = signInSchema.safeParse(req.body);
+		const body = await validateSignInBody(req.body);
 
-		if (!parsedBody.success) {
-			logger.error({ err: parsedBody.error }, "Validation error");
-			throw new APIError(401, "Invalid email/password");
-		}
-		const body = parsedBody.data;
-
-		const user = await db.query.usersTable.findFirst({
-			columns: {
-				id: true,
-				email: true,
-				role: true,
-				password: true
-			},
-			where: eq(usersTable.email, body.email)
-		});
-
-		if (!user) {
-			logger.error({ err: body.email }, "User not found");
-			throw new APIError(401, "Invalid email/password");
-		}
+		const user = await findUser(body.email);
 
 		if (!(await comparePassword(body.password, user.password))) {
 			logger.error({ err: body.email }, "Invalid password");
 			throw new APIError(401, "Invalid email/password");
 		}
 
-		// Generating access token and refresh token
-		const [tokenSettled, refreshTokenSettled] = await Promise.allSettled([
-			generateAccessToken({ id: user.id, role: user.role }),
-			generateRefreshToken({ id: user.id, role: user.role })
-		]);
+		const { accessToken, refreshToken } = await generateTokens({ id: user.id, role: user.role });
 
-		if (tokenSettled.status === "rejected" || refreshTokenSettled.status === "rejected") {
-			throw new APIError(500, "Internal server error");
-		}
-
-		const accessToken = tokenSettled.value;
-		const refreshToken = refreshTokenSettled.value;
-
-		// Getting old refresh token from cookie if present
-		// Rotating refresh token in db
-		const oldRefreshToken = req.cookies.refreshToken;
-
-		dbQueue
-			.createJob([
-				{
-					refresh_token: refreshToken,
-					user_id: user.id,
-					device: req.headers["user-agent"] ?? null
-				},
-				oldRefreshToken
-			])
-			.save();
+		await rotateRefreshToken(req, refreshToken, user.id);
 
 		res.cookie("refreshToken", refreshToken, {
 			httpOnly: true,
@@ -123,4 +80,39 @@ export async function signIn(req: Request, res: Response, next: NextFunction) {
 		logger.error(error);
 		return next(new APIError(500, "Internal server error"));
 	}
+}
+
+async function validateSignInBody(body: unknown) {
+	const parsedBody = signInSchema.safeParse(body);
+	if (!parsedBody.success) {
+		logger.error({ err: parsedBody.error }, "Validation error");
+		throw new APIError(400, "Bad Request");
+	}
+	return parsedBody.data;
+}
+
+async function findUser(email: string) {
+	const user = await db.query.usersTable.findFirst({
+		columns: { id: true, email: true, role: true, password: true },
+		where: eq(usersTable.email, email)
+	});
+	if (!user) {
+		logger.error({ err: email }, "User not found");
+		throw new APIError(401, "Invalid email/password");
+	}
+	return user;
+}
+
+async function rotateRefreshToken(req: Request, newRefreshToken: string, userId: string) {
+	const oldRefreshToken = req.cookies.refreshToken;
+	await dbQueue
+		.createJob([
+			{
+				refresh_token: newRefreshToken,
+				user_id: userId,
+				device: req.headers["user-agent"] ?? null
+			},
+			oldRefreshToken
+		])
+		.save();
 }

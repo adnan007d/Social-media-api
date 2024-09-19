@@ -53,3 +53,11 @@ export async function safeVerifyAccessToken(token: string) {
 		return { status: "invalid" };
 	}
 }
+
+export async function generateTokens(payload: JWTPayload) {
+	const [accessToken, refreshToken] = await Promise.all([
+		generateAccessToken(payload),
+		generateRefreshToken(payload)
+	]);
+	return { accessToken, refreshToken };
+}
