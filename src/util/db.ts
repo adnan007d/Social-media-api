@@ -8,10 +8,12 @@ import {
 	refreshTokensTable,
 	usersTable
 } from "@/db/schema";
-import { eq, sql, desc, count } from "drizzle-orm";
+import { eq, sql, desc, count, and } from "drizzle-orm";
 import logger from "./logger";
 import redis from "@/util/redis";
 import { type CommentBody, type PaginationQuery, type PostQuery } from "./validations";
+import { aliasedTable } from "drizzle-orm";
+import env from "@/env";
 
 export async function rotateRefreshTokenInDB(values: InsertRefreshToken, old?: string) {
 	// If old refresh token is provided, delete
@@ -69,6 +71,7 @@ export async function getPostFromDB(postId: string) {
 		return JSON.parse(posts);
 	}
 
+	const userImageTable = aliasedTable(imagesTable, "user_image");
 	const [result] = await db
 		.select({
 			id: postsTable.id,
@@ -76,17 +79,30 @@ export async function getPostFromDB(postId: string) {
 			content: postsTable.content,
 			created_at: postsTable.created_at,
 			updated_at: postsTable.updated_at,
-			likes: count(likesTable.id).mapWith(Number).as("likes")
+			likes: count(likesTable.id).mapWith(Number).as("likes"),
+			comments: count(commentTable.id).mapWith(Number).as("comments"),
+			image: imagesTable.url,
+			username: usersTable.username,
+			user_profile: userImageTable.url
 		})
 		.from(postsTable)
 		.where(eq(postsTable.id, postId))
+		.innerJoin(usersTable, eq(postsTable.user_id, usersTable.id))
+		.leftJoin(imagesTable, and(eq(imagesTable.type, "post"), eq(imagesTable.ref_id, postsTable.id)))
+		.leftJoin(
+			userImageTable,
+			and(eq(userImageTable.type, "profile"), eq(userImageTable.ref_id, postsTable.user_id))
+		)
 		.leftJoin(likesTable, eq(postsTable.id, likesTable.post_id))
-		.groupBy(postsTable.id);
+		.leftJoin(commentTable, eq(postsTable.id, commentTable.post_id))
+		.groupBy(postsTable.id, imagesTable.url, usersTable.username, userImageTable.url);
 
 	if (result) {
-		await redis.set(`posts:${postId}`, JSON.stringify(result), {
-			EX: 1 * 60
-		});
+		await redis.set(
+			`posts:${postId}`,
+			JSON.stringify(result),
+			env.NODE_ENV !== "test" ? { EX: 1 * 60 } : undefined
+		);
 		return result;
 	}
 
@@ -102,6 +118,8 @@ export async function getPostsFromDB(params: PostQuery) {
 		return JSON.parse(cache);
 	}
 
+	const userImageTable = aliasedTable(imagesTable, "user_image");
+
 	const query = db
 		.select({
 			id: postsTable.id,
@@ -109,11 +127,22 @@ export async function getPostsFromDB(params: PostQuery) {
 			content: postsTable.content,
 			created_at: postsTable.created_at,
 			updated_at: postsTable.updated_at,
-			likes: count(likesTable.id).mapWith(Number).as("likes")
+			likes: count(likesTable.id).mapWith(Number).as("likes"),
+			comments: count(commentTable.id).mapWith(Number).as("comments"),
+			image: imagesTable.url,
+			username: usersTable.username,
+			user_profile: userImageTable.url
 		})
 		.from(postsTable)
+		.innerJoin(usersTable, eq(postsTable.user_id, usersTable.id))
+		.leftJoin(imagesTable, and(eq(imagesTable.type, "post"), eq(imagesTable.ref_id, postsTable.id)))
+		.leftJoin(
+			userImageTable,
+			and(eq(userImageTable.type, "profile"), eq(userImageTable.ref_id, postsTable.user_id))
+		)
 		.leftJoin(likesTable, eq(postsTable.id, likesTable.post_id))
-		.groupBy(postsTable.id)
+		.leftJoin(commentTable, eq(postsTable.id, commentTable.post_id))
+		.groupBy(postsTable.id, imagesTable.url, usersTable.username, userImageTable.url)
 		.orderBy(desc(postsTable.created_at))
 		.limit(limit)
 		.offset(offset);
@@ -123,9 +152,11 @@ export async function getPostsFromDB(params: PostQuery) {
 	const result = await query.execute();
 
 	if (result) {
-		await redis.set(`posts:query:${JSON.stringify(params)}`, JSON.stringify(result), {
-			EX: 1 * 60
-		});
+		await redis.set(
+			`posts:query:${JSON.stringify(params)}`,
+			JSON.stringify(result),
+			env.NODE_ENV !== "test" ? { EX: 1 * 60 } : undefined
+		);
 	}
 
 	return result;
@@ -194,7 +225,7 @@ export async function getCommentsForPostDB(postId: string, params: PaginationQue
 		})
 		.from(commentTable)
 		.where(eq(commentTable.post_id, postId))
-		.leftJoin(usersTable, eq(usersTable.id, commentTable.user_id))
+		.innerJoin(usersTable, eq(usersTable.id, commentTable.user_id))
 		.leftJoin(imagesTable, eq(imagesTable.ref_id, commentTable.user_id))
 		.orderBy(desc(commentTable.created_at))
 		.limit(limit)
@@ -202,7 +233,11 @@ export async function getCommentsForPostDB(postId: string, params: PaginationQue
 		.execute();
 
 	if (comments) {
-		await redis.set(redisKey, JSON.stringify(comments), { EX: 1 * 60 });
+		await redis.set(
+			redisKey,
+			JSON.stringify(comments),
+			env.NODE_ENV !== "test" ? { EX: 1 * 60 } : undefined
+		);
 	}
 
 	return comments;
