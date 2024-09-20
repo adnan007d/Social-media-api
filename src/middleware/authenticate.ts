@@ -17,18 +17,18 @@ declare module "express" {
 		};
 	}
 }
+
 const UNAUTHORIZED_ERROR = new APIError(401, "Unauthorized");
 
 export async function authenticate(req: Request, res: Response, next: NextFunction) {
 	const token = req.headers.authorization?.split("Bearer ")[1];
-
-	if (!token) {
-		throw UNAUTHORIZED_ERROR;
-	}
-
 	try {
-		const { status, payload } = await safeVerifyAccessToken(token);
+		if (!token) {
+			throw UNAUTHORIZED_ERROR;
+		}
 
+		const { status, payload } = await safeVerifyAccessToken(token);
+		logger.error({ status, payload });
 		switch (status) {
 			case "valid":
 				if (payload) await handleValidToken(req, payload);

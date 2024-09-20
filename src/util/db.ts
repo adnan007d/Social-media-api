@@ -1,7 +1,15 @@
 import db from "@/db";
-import { imagesTable, type InsertRefreshToken, refreshTokensTable } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import {
+	imagesTable,
+	type InsertRefreshToken,
+	likesTable,
+	postsTable,
+	refreshTokensTable
+} from "@/db/schema";
+import { eq, sql, desc, count } from "drizzle-orm";
 import logger from "./logger";
+import redis from "@/util/redis";
+import { type PostQuery } from "./validations";
 
 export async function rotateRefreshTokenInDB(values: InsertRefreshToken, old?: string) {
 	// If old refresh token is provided, delete
@@ -51,4 +59,70 @@ export async function deleteOldProfileImages(ref_id: string) {
 		logger.error("Error deleting old profile imagesTable:", error);
 		throw error;
 	}
+}
+
+export async function getPostFromDB(postId: string) {
+	const posts = await redis.get(`posts:${postId}`);
+	if (posts) {
+		return JSON.parse(posts);
+	}
+
+	const [result] = await db
+		.select({
+			id: postsTable.id,
+			user_id: postsTable.user_id,
+			content: postsTable.content,
+			created_at: postsTable.created_at,
+			updated_at: postsTable.updated_at,
+			likes: count(likesTable.id).mapWith(Number).as("likes")
+		})
+		.from(postsTable)
+		.where(eq(postsTable.id, postId))
+		.leftJoin(likesTable, eq(postsTable.id, likesTable.post_id))
+		.groupBy(postsTable.id);
+
+	if (result) {
+		await redis.set(`posts:${postId}`, JSON.stringify(result), {
+			EX: 1 * 60
+		});
+		return result;
+	}
+
+	return null;
+}
+
+export async function getPostsFromDB(params: PostQuery) {
+	const { limit, offset, user_id } = params;
+
+	const cache = await redis.get(`posts:query:${JSON.stringify(params)}`);
+
+	if (cache) {
+		return JSON.parse(cache);
+	}
+
+	const query = db
+		.select({
+			id: postsTable.id,
+			user_id: postsTable.user_id,
+			content: postsTable.content,
+			created_at: postsTable.created_at,
+			updated_at: postsTable.updated_at,
+			likes: count(likesTable.id).mapWith(Number).as("likes")
+		})
+		.from(postsTable)
+		.leftJoin(likesTable, eq(postsTable.id, likesTable.post_id))
+		.groupBy(postsTable.id)
+		.orderBy(desc(postsTable.created_at))
+		.limit(limit)
+		.offset(offset);
+	if (user_id) {
+		query.where(eq(postsTable.user_id, user_id));
+	}
+	const result = await query.execute();
+
+	await redis.set(`posts:query:${JSON.stringify(params)}`, JSON.stringify(result), {
+		EX: 1 * 60
+	});
+
+	return result;
 }

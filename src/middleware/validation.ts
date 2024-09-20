@@ -1,5 +1,4 @@
 import type { AnyZodObject } from "zod";
-import { APIError } from "@/util/util";
 import type { Request, Response, NextFunction } from "express";
 
 /**
@@ -13,9 +12,6 @@ export function validateBody(schema: AnyZodObject) {
 			req.body = parsedBody.data;
 			return next();
 		}
-
-		const firstError = parsedBody.error.errors[0];
-		const message = `${firstError?.path.join(".")}: ${firstError?.message}`;
-		return next(new APIError(400, message, parsedBody.error.format()));
+		return next(parsedBody.error);
 	};
 }

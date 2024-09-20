@@ -86,7 +86,7 @@ async function validateSignInBody(body: unknown) {
 	const parsedBody = signInSchema.safeParse(body);
 	if (!parsedBody.success) {
 		logger.error({ err: parsedBody.error }, "Validation error");
-		throw new APIError(400, "Bad Request");
+		throw new APIError(401, "Invalid email/password");
 	}
 	return parsedBody.data;
 }

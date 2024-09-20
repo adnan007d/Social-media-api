@@ -4,6 +4,7 @@ import db from "@/db";
 import { sql } from "drizzle-orm";
 import authRouter from "@/routes/auth";
 import userRouter from "@/routes/user";
+import postsRouter from "@/routes/posts";
 
 import { requestLogger } from "@/middleware/requestLogger";
 import { errorHandler } from "@/middleware/errorHandler";
@@ -20,6 +21,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/auth", authRouter);
 app.use("/users", userRouter);
+app.use("/posts", postsRouter);
 
 app.get("/", (_req, res) => {
 	res.send("Hello World");
