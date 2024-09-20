@@ -28,7 +28,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 		}
 
 		const { status, payload } = await safeVerifyAccessToken(token);
-		logger.error({ status, payload });
+
 		switch (status) {
 			case "valid":
 				if (payload) await handleValidToken(req, payload);
