@@ -6,6 +6,7 @@ import authRouter from "@/routes/auth";
 import userRouter from "@/routes/user";
 import postsRouter from "@/routes/posts";
 import commentsRouter from "@/routes/comment";
+import likesRouter from "@/routes/likes";
 
 import { requestLogger } from "@/middleware/requestLogger";
 import { errorHandler } from "@/middleware/errorHandler";
@@ -23,6 +24,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/auth", authRouter);
 app.use("/users", userRouter);
 app.use("/posts", postsRouter);
+app.use("/likes", likesRouter);
 app.use("/comments", commentsRouter);
 
 app.get("/", (_req, res) => {

@@ -53,7 +53,7 @@ describe("likes", async () => {
 
 	it("unauthorized", async () => {
 		await inject(app)
-			.post(`/posts/${post.id}/like`)
+			.post(`/likes/${post.id}`)
 			.then((res) => {
 				expect(res.statusCode).toBe(401);
 			});
@@ -71,7 +71,7 @@ describe("likes", async () => {
 			});
 
 		await inject(app)
-			.post(`/posts/${postId}/like`)
+			.post(`/likes/${postId}`)
 			.headers({ Authorization: `Bearer ${accessToken}` })
 			.cookies({ refreshToken })
 			.then((res) => {
@@ -99,7 +99,7 @@ describe("likes", async () => {
 		}
 
 		await inject(app)
-			.post(`/posts/${post.id}/like`)
+			.post(`/likes/${post.id}`)
 			.headers({ Authorization: `Bearer ${accessToken}` })
 			.cookies({ refreshToken })
 			.then((res) => {
@@ -107,7 +107,7 @@ describe("likes", async () => {
 			});
 
 		await inject(app)
-			.delete(`/posts/${post.id}/unlike`)
+			.delete(`/likes/${post.id}`)
 			.headers({ Authorization: `Bearer ${accessToken}` })
 			.cookies({ refreshToken })
 			.then((res) => {
