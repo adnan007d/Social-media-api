@@ -55,17 +55,19 @@ describe("posts", async () => {
 	});
 
 	it("successful", async () => {
-		await inject(app)
-			.post("/posts")
-			.body({ content: "Hello" })
-			.headers({ Authorization: `Bearer ${accessToken}` })
-			.cookies({ refreshToken })
-			.then((res) => {
-				expect(res.statusCode).toBe(201);
-				expect(res.json().id).toBeTypeOf("string");
-				expect(res.json().content).toBe("Hello");
-				postId = res.json().id;
-			});
+		for (let i = 0; i < 20; i++) {
+			await inject(app)
+				.post("/posts")
+				.body({ content: "Hello" })
+				.headers({ Authorization: `Bearer ${accessToken}` })
+				.cookies({ refreshToken })
+				.then((res) => {
+					expect(res.statusCode).toBe(201);
+					expect(res.json().id).toBeTypeOf("string");
+					expect(res.json().content).toBe("Hello");
+					postId = res.json().id;
+				});
+		}
 	});
 
 	it("get posts", async () => {

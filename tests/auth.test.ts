@@ -62,17 +62,19 @@ describe("auth signup", () => {
 	});
 
 	it("valid body", async () => {
-		const password = testPassword;
-		await inject(app)
-			.post("/auth/signup")
-			.body({
-				username: generateUsername(),
-				email: generateEmail(),
-				password
-			})
-			.then((res) => {
-				expect(res.statusCode).toBe(201);
-			});
+		for (let i = 0; i < 20; i++) {
+			const password = testPassword;
+			await inject(app)
+				.post("/auth/signup")
+				.body({
+					username: generateUsername(),
+					email: generateEmail(),
+					password
+				})
+				.then((res) => {
+					expect(res.statusCode).toBe(201);
+				});
+		}
 	});
 
 	it("email already exists", async () => {
