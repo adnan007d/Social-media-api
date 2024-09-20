@@ -1,15 +1,17 @@
 import db from "@/db";
 import {
+	commentTable,
 	imagesTable,
 	type InsertRefreshToken,
 	likesTable,
 	postsTable,
-	refreshTokensTable
+	refreshTokensTable,
+	usersTable
 } from "@/db/schema";
 import { eq, sql, desc, count } from "drizzle-orm";
 import logger from "./logger";
 import redis from "@/util/redis";
-import { type PostQuery } from "./validations";
+import { type CommentBody, type PaginationQuery, type PostQuery } from "./validations";
 
 export async function rotateRefreshTokenInDB(values: InsertRefreshToken, old?: string) {
 	// If old refresh token is provided, delete
@@ -120,9 +122,88 @@ export async function getPostsFromDB(params: PostQuery) {
 	}
 	const result = await query.execute();
 
-	await redis.set(`posts:query:${JSON.stringify(params)}`, JSON.stringify(result), {
-		EX: 1 * 60
-	});
+	if (result) {
+		await redis.set(`posts:query:${JSON.stringify(params)}`, JSON.stringify(result), {
+			EX: 1 * 60
+		});
+	}
 
 	return result;
+}
+
+type CreateCommentInDB = {
+	body: CommentBody;
+	user_id: string;
+	post_id: string;
+};
+
+export async function createCommentInDB(params: CreateCommentInDB) {
+	const { body, user_id, post_id } = params;
+	const [comment] = await db
+		.insert(commentTable)
+		.values({ ...body, user_id, post_id })
+		.returning({
+			id: commentTable.id,
+			content: commentTable.content,
+			user_id: commentTable.user_id,
+			post_id: commentTable.post_id,
+			created_at: commentTable.created_at,
+			updated_at: commentTable.updated_at
+		})
+		.execute();
+	return comment;
+}
+
+export async function deleteCommentInDB(comment_id: string, user_id: string) {
+	// Author and the post owner can delete the comment
+	const [comment] = await db.execute(sql`
+DELETE FROM ${commentTable}
+WHERE ${commentTable.id} = ${comment_id} and (
+  ${commentTable.user_id} = ${user_id} or ${user_id} in (
+    SELECT ${postsTable.user_id}
+    FROM ${postsTable}
+    WHERE ${postsTable.id} = ${commentTable.post_id}
+    )
+)
+RETURNING ${commentTable.id}
+`);
+	return comment;
+}
+
+export async function getCommentsForPostDB(postId: string, params: PaginationQuery) {
+	const { limit, offset } = params;
+
+	const redisKey = `comments:${postId}:${JSON.stringify(params)}`;
+
+	const cache = await redis.get(redisKey);
+
+	if (cache) {
+		return JSON.parse(cache);
+	}
+
+	const comments = await db
+		.select({
+			id: commentTable.id,
+			user_id: commentTable.user_id,
+			post_id: commentTable.post_id,
+			content: commentTable.content,
+			username: usersTable.username,
+			user_profile: imagesTable.url,
+			created_at: commentTable.created_at,
+			updated_at: commentTable.updated_at
+		})
+		.from(commentTable)
+		.where(eq(commentTable.post_id, postId))
+		.leftJoin(usersTable, eq(usersTable.id, commentTable.user_id))
+		.leftJoin(imagesTable, eq(imagesTable.ref_id, commentTable.user_id))
+		.orderBy(desc(commentTable.created_at))
+		.limit(limit)
+		.offset(offset)
+		.execute();
+
+	if (comments) {
+		await redis.set(redisKey, JSON.stringify(comments), { EX: 1 * 60 });
+	}
+
+	return comments;
 }

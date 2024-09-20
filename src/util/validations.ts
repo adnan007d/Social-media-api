@@ -37,9 +37,16 @@ export const usersUpdateSchema = z.object({
 
 export type UserUpdateBody = z.infer<typeof usersUpdateSchema>;
 
+export const paginationQuerySchema = z.object({
+	limit: z.coerce.number().int().positive().max(50).default(12).catch(12),
+	offset: z.coerce.number().int().nonnegative().default(0).catch(0)
+});
+
+export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
+
 export const postQuerySchema = z.object({
-	limit: z.coerce.number().int().positive().max(12).default(12).catch(12),
-	offset: z.coerce.number().int().nonnegative().default(0).catch(0),
+	limit: paginationQuerySchema.shape.limit,
+	offset: paginationQuerySchema.shape.offset,
 	user_id: z.string().uuid("invalid user").optional()
 });
 
@@ -53,3 +60,12 @@ export const postCreateSchema = z.object({
 });
 
 export type PostCreateBody = z.infer<typeof postCreateSchema>;
+
+export const postCommentBodySchema = z.object({
+	content: z
+		.string()
+		.min(1, "Comment content is required")
+		.max(1000, "Comment content should be less than 1000 characters")
+});
+
+export type CommentBody = z.infer<typeof postCommentBodySchema>;
