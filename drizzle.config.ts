@@ -6,7 +6,7 @@ export default defineConfig({
 	out: "migrations",
 	dialect: "postgresql",
 	dbCredentials: {
-		database: env.DB_NAME,
+		database: env.NODE_ENV === "production" ? env.DB_NAME : env.DEV_DB_NAME,
 		host: env.DB_HOST,
 		port: env.DB_PORT,
 		user: env.DB_USER,
