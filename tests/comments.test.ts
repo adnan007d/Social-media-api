@@ -63,11 +63,12 @@ describe("comments", async () => {
 			});
 	});
 
-	// eslint-disable-next-line
 	let user1CommentId1: string = "";
 	let user1CommentId2: string = "";
 	let user2CommentId1: string = "";
 	let user2CommentId2: string = "";
+
+	void user1CommentId1;
 
 	it("successful", async () => {
 		// user1 comment on post1 and post2

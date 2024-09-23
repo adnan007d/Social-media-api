@@ -1,14 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import {
-	boolean,
-	index,
-	pgEnum,
-	pgTable,
-	text,
-	timestamp,
-	unique,
-	uuid
-} from "drizzle-orm/pg-core";
+import { boolean, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const imageTypeEnum = pgEnum("image_type", ["profile", "post"]);

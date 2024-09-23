@@ -1,3 +1,4 @@
+// @ts-expect-error Can't do anything here
 import type { GlobalSetupContext } from "vitest/node";
 import * as schema from "@/db/schema";
 import { createTestDB, generatePosts, generateUsers, migrateDB } from "./testUtil";

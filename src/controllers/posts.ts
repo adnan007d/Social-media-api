@@ -108,7 +108,7 @@ async function createPostInDB(body: PostCreateBody, userId: string) {
 
 async function updatePostInDB(body: PostCreateBody, userId: string, postId: string) {
 	if (Object.keys(body).length === 0) {
-		return {};
+		return { id: postId, user_id: userId };
 	}
 
 	const [post] = await db
