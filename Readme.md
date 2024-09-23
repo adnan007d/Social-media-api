@@ -22,6 +22,18 @@ Requirements:
 -   Postgres
 -   Redis
 
+If you are using docker you can use the following command to start the required services
+
+```shell
+docker pull postgres
+docker pull redis
+```
+
+```shell
+docker run --name pgsql -e POSTGRES_PASSWORD=<YOURPASSWORD> -p 5432:5432 postgres
+docker run --name redis -p 6379:6379 redis
+```
+
 #### testing
 
 ```shell
