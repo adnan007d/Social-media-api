@@ -146,22 +146,32 @@ main()
 	.catch(console.error);
 
 async function connectAndMigrate() {
-	const _sql = postgres({
+	// Creating a temporary db to connect as we cannot drop the db which is currently in use
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const options: postgres.Options<any> = {
 		database: env.DEV_DB_NAME,
 		host: env.DB_HOST,
 		port: env.DB_PORT,
 		username: env.DB_USER,
 		password: env.DB_PASS
-	});
-	await _sql.unsafe(`DROP DATABASE IF EXISTS "test_${env.DEV_DB_NAME}"`);
-	await _sql.unsafe(`CREATE DATABASE "test_${env.DEV_DB_NAME}"`);
+	};
+	let sql = postgres(options);
+	const tempDB = `test_${env.DEV_DB_NAME}`;
+	await sql.unsafe(`DROP DATABASE IF EXISTS "${tempDB}"`);
+	await sql.unsafe(`CREATE DATABASE "${tempDB}"`);
+	await sql.end();
+	console.log("Temporary database created");
+	options.database = tempDB;
+	sql = postgres(options);
+	await sql.unsafe(`DROP DATABASE IF EXISTS "${env.DEV_DB_NAME}"`);
+	await sql.unsafe(`CREATE DATABASE "${env.DEV_DB_NAME}"`);
 	console.log("Database created");
-	await _sql.end();
+	await sql.end();
 }
 async function connectDB() {
 	console.log("Connecting to database");
 	const sql = postgres({
-		database: env.TEST_DB_NAME,
+		database: env.DEV_DB_NAME,
 		host: env.DB_HOST,
 		port: env.DB_PORT,
 		username: env.DB_USER,
