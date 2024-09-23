@@ -2,11 +2,11 @@ import app from "@/app";
 import inject from "light-my-request";
 import { describe, it, expect, beforeEach } from "vitest";
 import { generateEmail, generateUsername, testPassword } from "./testUtil";
-import db from "@/db";
 import { refreshTokensTable, usersTable } from "@/db/schema";
 import { eq, sql, ne } from "drizzle-orm";
 import { SignJWT } from "jose";
 import env from "@/env";
+import { db } from "./testUtil";
 
 describe("auth signup", () => {
 	it("empty body", async () => {

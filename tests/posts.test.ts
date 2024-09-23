@@ -1,34 +1,16 @@
-import { expect, describe, it, beforeEach, afterAll } from "vitest";
+import { expect, describe, it, inject as vitestInject, beforeAll, afterAll } from "vitest";
 import inject from "light-my-request";
-import db from "@/db";
-import { usersTable } from "@/db/schema";
-import { sql, ne } from "drizzle-orm";
 import app from "@/app";
 import { testPassword } from "./testUtil";
 import redis from "@/util/redis";
 
+const users = vitestInject("users");
 describe("posts", async () => {
 	let postId: string;
-	await redis.connect();
+	beforeAll(async () => await redis.connect());
+	afterAll(async () => await redis.disconnect());
 
-	afterAll(async () => {
-		await redis.disconnect();
-	});
-
-	const result = await db
-		.select({
-			email: usersTable.email,
-			password: usersTable.password,
-			id: usersTable.id
-		})
-		.from(usersTable)
-		.orderBy(sql`RANDOM()`)
-		.limit(1)
-		.execute();
-	if (!result[0]) {
-		throw new Error("No user found");
-	}
-	const user = result[0];
+	const user = users[Math.floor(Math.random() * users.length)]!;
 	const { json } = await inject(app)
 		.post("/auth/signin")
 		.body({ email: user.email, password: testPassword });
@@ -128,16 +110,8 @@ describe("posts", async () => {
 	});
 
 	it("update someone else's post", async () => {
-		const [user1] = await db
-			.select({ id: usersTable.id, email: usersTable.email })
-			.from(usersTable)
-			.where(ne(usersTable.id, user.id))
-			.limit(1)
-			.execute();
+		const user1 = users.find((u) => u.id !== user.id)!;
 
-		if (!user1) {
-			throw new Error("No user found");
-		}
 		let newAccessToken: string | undefined;
 		let newRefreshToken: string | undefined;
 		await inject(app)
@@ -160,16 +134,7 @@ describe("posts", async () => {
 	});
 
 	it("delete someone else's post", async () => {
-		const [user1] = await db
-			.select({ id: usersTable.id, email: usersTable.email })
-			.from(usersTable)
-			.where(ne(usersTable.id, user.id))
-			.limit(1)
-			.execute();
-
-		if (!user1) {
-			throw new Error("No user found");
-		}
+		const user1 = users.find((u) => u.id !== user.id)!;
 
 		let newAccessToken: string | undefined;
 		let newRefreshToken: string | undefined;

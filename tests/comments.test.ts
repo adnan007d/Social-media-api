@@ -1,35 +1,15 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, inject as vitestInject, beforeAll, afterAll } from "vitest";
 import app from "@/app";
 import inject from "light-my-request";
-import db from "@/db";
-import { usersTable } from "@/db/schema";
-import { sql } from "drizzle-orm";
 import { testPassword } from "./testUtil";
 import redis from "@/util/redis";
 
+const users = vitestInject("users");
 describe("comments", async () => {
-	beforeAll(async () => {
-		await redis.connect();
-	});
-
-	afterAll(async () => {
-		await redis.disconnect();
-	});
-
-	const [user1, user2] = await db
-		.select({
-			id: usersTable.id,
-			email: usersTable.email,
-			password: usersTable.password
-		})
-		.from(usersTable)
-		.orderBy(sql`RANDOM()`)
-		.limit(2)
-		.execute();
-
-	if (!user1 || !user2) {
-		throw new Error("No user found");
-	}
+	beforeAll(async () => await redis.connect());
+	afterAll(async () => await redis.disconnect());
+	const user1 = users[Math.floor(Math.random() * users.length)]!;
+	const user2 = users.find((user) => user.id !== user1.id)!;
 
 	const { json: json1 } = await inject(app)
 		.post("/auth/signin")
@@ -85,7 +65,6 @@ describe("comments", async () => {
 
 	// eslint-disable-next-line
 	let user1CommentId1: string = "";
-	// eslint-disable-next-line
 	let user1CommentId2: string = "";
 	let user2CommentId1: string = "";
 	let user2CommentId2: string = "";

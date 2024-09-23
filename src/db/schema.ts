@@ -13,27 +13,16 @@ import {
 export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const imageTypeEnum = pgEnum("image_type", ["profile", "post"]);
 
-export const imagesTable = pgTable(
-	"images",
-	{
-		id: uuid("id").defaultRandom().primaryKey(),
-		type: imageTypeEnum("type").notNull(),
-		url: text("url").notNull(),
-		public_id: text("public_id").notNull(),
-		// ref_id is the id of the user or post or any future entity
-		ref_id: uuid("ref_id").notNull(),
-		created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-		updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
-	},
-	(table) => ({
-		// Create the composite index
-		typeRefIdCreatedIdx: index("idx_type_refid_created").on(
-			table.type,
-			table.ref_id,
-			table.created_at
-		)
-	})
-);
+export const imagesTable = pgTable("images", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	type: imageTypeEnum("type").notNull(),
+	url: text("url").notNull(),
+	public_id: text("public_id").notNull(),
+	// ref_id is the id of the user or post or any future entity
+	ref_id: uuid("ref_id").notNull(),
+	created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+	updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+});
 
 export const usersTable = pgTable("users", {
 	id: uuid("id").defaultRandom().primaryKey(),
@@ -41,7 +30,6 @@ export const usersTable = pgTable("users", {
 	password: text("password").notNull(),
 	role: roleEnum("role").default("user").notNull(),
 	email_verified: boolean("email_verified").default(false),
-	profile_image: uuid("profile_image").references(() => imagesTable.id, { onDelete: "set null" }),
 	username: text("username").notNull().unique(),
 	created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -112,16 +100,6 @@ export const postRelations = relations(postsTable, ({ one, many }) => ({
 	comments: many(commentTable)
 }));
 
-export const userRelations = relations(usersTable, ({ one, many }) => ({
-	image: one(imagesTable, {
-		fields: [usersTable.profile_image],
-		references: [imagesTable.ref_id]
-	}),
-	posts: many(postsTable),
-	likes: many(likesTable),
-	comments: many(commentTable)
-}));
-
 export type InsertUser = typeof usersTable.$inferInsert;
 export type SelectUser = typeof usersTable.$inferSelect;
 
@@ -130,3 +108,12 @@ export type SelectRefreshToken = typeof refreshTokensTable.$inferSelect;
 
 export type InsertImage = typeof imagesTable.$inferInsert;
 export type SelectImage = typeof imagesTable.$inferSelect;
+
+export type InsertPost = typeof postsTable.$inferInsert;
+export type SelectPost = typeof postsTable.$inferSelect;
+
+export type InsertLike = typeof likesTable.$inferInsert;
+export type SelectLike = typeof likesTable.$inferSelect;
+
+export type InsertComment = typeof commentTable.$inferInsert;
+export type SelectComment = typeof commentTable.$inferSelect;

@@ -6,21 +6,39 @@ Implements all the necessary bits and pieces of fundamental backend development
 I made That will give you a good idea of what I am trying to achieve with this project.
 It also has a lot of information about the design decisions I made.**
 
-- [x] Users
-- [x] Images
-- [x] Posts
-- [x] Likes
-- [x] Comments
-- [ ] Notifications
+-   [x] Users
+-   [x] Images
+-   [x] Posts
+-   [x] Likes
+-   [x] Comments
+-   [ ] Notifications
 
 Before running the project make sure to create a `.env` file in the root directory with the required environment variables. refer to the `.env.example` file for the required variables.
 
+Note: There are separate DB_NAME for testing and development. Make sure to create the development before running the project, testing database is created automatically by deleting the old test database and creating a fresh one
+
 Requirements:
 
-- Postgres
-- Redis
+-   Postgres
+-   Redis
 
-I will be creating a seeder which will seed the database with some dummy data (in millions probably).
+#### testing
+
+```shell
+pnpm test
+```
+
+#### Seeding
+
+```
+pnpm db:seed
+```
+
+Seeding will create a user and a post for testing purposes the password for the user is defined in [src/seed.ts](src/seed.ts)
+
+> Note: Seeding will delete all the data in the database and create new data
+
+Seeding will take some time as it is creating a `lot` of data, usually `5-10 minutes`
 
 Just for the fun I will also be creating a frontend for this project
 Will recreate this in Golang too
@@ -29,29 +47,29 @@ Will recreate this in Golang too
 
 Authentication:
 
-- Signup: `POST /auth/signup`
-- Signin: `POST /auth/signin`
+-   Signup: `POST /auth/signup`
+-   Signin: `POST /auth/signin`
 
 Users:
 
-- Get Me: `GET /users/me`
-- Update Me: `PATCH /users/me`
+-   Get Me: `GET /users/me`
+-   Update Me: `PATCH /users/me`
 
 Posts:
 
-- Get All Posts: `GET /posts`
-- Create Post: `POST /posts`
-- Get Post: `GET /posts/:id`
-- Update Post: `PATCH /posts/:id`
-- Delete Post: `DELETE /posts/:id`
+-   Get All Posts: `GET /posts`
+-   Create Post: `POST /posts`
+-   Get Post: `GET /posts/:id`
+-   Update Post: `PATCH /posts/:id`
+-   Delete Post: `DELETE /posts/:id`
 
 Likes:
 
-- Like Post: `POST /likes/:postId`
-- Unlike Post: `DELETE /likes/:postId`
+-   Like Post: `POST /likes/:postId`
+-   Unlike Post: `DELETE /likes/:postId`
 
 Comments:
 
-- Get Comments: `GET /comments/:postId`
-- Create Comment: `POST /comments/:postId`
-- delete Comment: `DELETE /comments/:commentId`
+-   Get Comments: `GET /comments/:postId`
+-   Create Comment: `POST /comments/:postId`
+-   delete Comment: `DELETE /comments/:commentId`

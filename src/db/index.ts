@@ -3,9 +3,20 @@ import * as schema from "@/db/schema";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
+function getDbName() {
+	switch (env.NODE_ENV) {
+		case "test":
+			return env.TEST_DB_NAME;
+		case "development":
+			return env.DEV_DB_NAME;
+		default:
+			return env.DB_NAME;
+	}
+}
+
 // Default max pool connections are 10
 const sql = postgres({
-	database: env.DB_NAME,
+	database: getDbName(),
 	host: env.DB_HOST,
 	port: env.DB_PORT,
 	username: env.DB_USER,

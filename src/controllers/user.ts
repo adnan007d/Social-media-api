@@ -5,7 +5,7 @@ import logger from "@/util/logger";
 import { deleteOldProfileImagesQueue } from "@/util/queue";
 import { APIError } from "@/util/util";
 import { type UserUpdateBody } from "@/util/validations";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import type { Response, NextFunction, Request } from "express";
 import { PostgresError } from "postgres";
 
@@ -23,7 +23,10 @@ export async function getMe(req: Request, res: Response, next: NextFunction) {
 			})
 			.from(usersTable)
 			.where(eq(usersTable.id, reqUser.id))
-			.leftJoin(imagesTable, eq(imagesTable.id, usersTable.profile_image))
+			.leftJoin(
+				imagesTable,
+				and(eq(imagesTable.ref_id, usersTable.id), eq(imagesTable.type, "profile"))
+			)
 			.orderBy(desc(imagesTable.created_at))
 			.limit(1);
 
@@ -55,7 +58,7 @@ export async function updateMe(req: Request, res: Response, next: NextFunction) 
 
 			// If image record is not present create it
 			// Update the user record as well
-			const [image] = await db
+			await db
 				.insert(imagesTable)
 				.values({
 					public_id: imageData.public_id,
@@ -67,10 +70,6 @@ export async function updateMe(req: Request, res: Response, next: NextFunction) 
 					id: imagesTable.id
 				});
 			imageUrl = imageData.url;
-
-			if (image) {
-				updates.profile_image = image.id;
-			}
 
 			deleteOldProfileImagesQueue.createJob(user.id).save();
 
