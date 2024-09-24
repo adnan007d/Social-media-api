@@ -94,7 +94,7 @@ async function main() {
 	// await new Promise((resolve) => setTimeout(resolve, 5000));
 	// console.log(`Memory usage after GC: ${process.memoryUsage().rss / 1024 / 1024} MB`);
 	//
-	// console.log("Generating posts");
+	console.log("Generating posts");
 	let { postIds, imageIds } = await generatePosts(userIds);
 	// console.log(`Memory usage: after generate posts: ${process.memoryUsage().rss / 1024 / 1024} MB`);
 	// console.log("Waiting for 5 seconds for gc to collect");
@@ -112,6 +112,7 @@ async function main() {
 	// await new Promise((resolve) => setTimeout(resolve, 5000));
 	// console.log(`Memory usage after GC: ${process.memoryUsage().rss / 1024 / 1024} MB`);
 
+	console.log("Generating likes and comments");
 	generateLikesAndComments(postIds, userIds);
 	postIds = [];
 	userIds = [];
@@ -224,7 +225,7 @@ function createUserString() {
 	const email_verified = false;
 	const created_at = date;
 	const updated_at = date;
-	const userWithImageId = Math.random() < chanceOfUserImage ? randomUUID() : null;
+	const userWithImageId = Math.random() < chanceOfUserImage ? id : null;
 	return {
 		id,
 		str: `${id},${email},${username},${role},${email_verified},${password},${created_at},${updated_at}\n`,
@@ -289,7 +290,7 @@ async function generateLikesAndComments(postIds: string[], userIds: string[]) {
 	for (const postId of postIds) {
 		likesCount += await generateLikeForUsers(wl, postId, userIds);
 		commentsCount += await generateCommentForUsers(wc, postId, userIds);
-		if (likesCount % 1e5 === 0) {
+		if (likesCount % 1e4 === 0) {
 			console.log(`current progress ${likesCount} likes`);
 			console.log(`current progress ${commentsCount} comments`);
 		}
