@@ -11,7 +11,7 @@
 		"format": "prettier --write .",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
-		"db:seed": "tsx --max_old_space_size=4096 src/seed.ts",
+		"db:seed": "tsx src/seed.ts",
 		"test": "vitest",
 		"test:ui": "vitest --ui",
 		"test:run": "vitest run"

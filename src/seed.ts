@@ -19,12 +19,12 @@ const imagesFile = "images.csv";
 const postsFile = "posts.csv";
 const likesFile = "likes.csv";
 const commentsFile = "comments.csv";
-const noOfUsers = 1e6;
+const noOfUsers = 1e4;
 const chanceOfUserImage = 0.5; // 50% chance of user having an image
-const noOfPost = { min: 1, max: 10 }; // Min and Max number of posts per user
+const noOfPost = { min: 1, max: 5 }; // Min and Max number of posts per user
 const chanceOfPostImage = 0.7; // 70% chance of post having an image
-const chanceofLike = 0.7; // 70% chance of a user liking a post
-const chanceOfComment = 0.35; // 35% chance of a user commenting on a post
+const likesPerPost = { min: 10, max: 100 }; // Number of likes per post
+const commentsPerPost = { min: 10, max: 20 }; // Number of comments per post
 
 const dbWriteBatchSize = 1e3;
 
@@ -55,7 +55,7 @@ async function confirmation() {
 		});
 
 		rl.question(
-			`This will delete the database ${env.DEV_DB_NAME} if exists and create a fresh copy and seed it with millions of rows. Are you sure you want to continue? (yes/no): `,
+			`This will delete the database ${env.DEV_DB_NAME} if exists and create a fresh copy and seed it. Are you sure you want to continue? (yes/no): `,
 			(answer) => {
 				if (answer === "yes") {
 					rl.close();
@@ -79,6 +79,7 @@ async function main() {
 
 	console.log("Generating users");
 	let { userIds, usersWithImageids } = await generateUsers(noOfUsers);
+	console.log(`Generated ${userIds.length} users`);
 	// console.log(`Memory usage: after generate users: ${process.memoryUsage().rss / 1024 / 1024} MB`);
 	// console.log("Waiting for 5 seconds for gc to collect");
 	// runGC();
@@ -87,6 +88,7 @@ async function main() {
 	// console.log(`Memory usage after GC: ${process.memoryUsage().rss / 1024 / 1024} MB`);
 	// console.log("Generating user images");
 	await generateImages(usersWithImageids, "profile");
+	console.log(`Generated ${usersWithImageids.length} users with images`);
 	usersWithImageids = [];
 	// console.log(`Memory usage: after generate images: ${process.memoryUsage().rss / 1024 / 1024} MB`);
 	// console.log("Waiting for 5 seconds for gc to collect");
@@ -96,6 +98,7 @@ async function main() {
 	//
 	console.log("Generating posts");
 	let { postIds, imageIds } = await generatePosts(userIds);
+	console.log(`Generated ${postIds.length} posts`);
 	// console.log(`Memory usage: after generate posts: ${process.memoryUsage().rss / 1024 / 1024} MB`);
 	// console.log("Waiting for 5 seconds for gc to collect");
 	// runGC();
@@ -104,6 +107,7 @@ async function main() {
 
 	console.log("Generating post images");
 	await generateImages(imageIds, "post");
+	console.log(`Generated ${imageIds.length} post images`);
 	imageIds = [];
 
 	// console.log(`Memory usage: after generate images: ${process.memoryUsage().rss / 1024 / 1024} MB`);
@@ -113,7 +117,10 @@ async function main() {
 	// console.log(`Memory usage after GC: ${process.memoryUsage().rss / 1024 / 1024} MB`);
 
 	console.log("Generating likes and comments");
-	generateLikesAndComments(postIds, userIds);
+	await generateLikesAndComment(postIds, userIds);
+	// await generateLikes(postIds, userIds);
+	//
+	// await generateComments(postIds, userIds);
 	postIds = [];
 	userIds = [];
 	// console.log(`Memory usage: after generate likes: ${process.memoryUsage().rss / 1024 / 1024} MB`);
@@ -125,26 +132,31 @@ async function main() {
 
 main()
 	.then(async () => {
-		console.log("Done seeding", process.memoryUsage());
-
-		console.log(`Memory usage: ${process.memoryUsage().rss / 1024 / 1024} MB`);
-		const db = await connectDB();
-		console.log(`Memory usage: after connect db: ${process.memoryUsage().rss / 1024 / 1024} MB`);
-
-		console.log("Inserting data into database");
-		console.log("Inserting users");
-		await insertUsers(db);
-		console.log("Inserting posts");
-		await insertPosts(db);
-		console.log("Inserting images");
-		await insertImages(db);
-		console.log("Inserting likes");
-		await insertLikes(db);
-		console.log("Inserting comments");
-		await insertComments(db);
+		await dbSeed();
+		console.log("Done seeding");
+		process.exit(0);
 	})
-	.then(() => process.exit(0))
 	.catch(console.error);
+
+async function dbSeed() {
+	console.log("Done seeding", process.memoryUsage());
+
+	console.log(`Memory usage: ${process.memoryUsage().rss / 1024 / 1024} MB`);
+	const db = await connectDB();
+	console.log(`Memory usage: after connect db: ${process.memoryUsage().rss / 1024 / 1024} MB`);
+
+	console.log("Inserting data into database");
+	console.log("Inserting users");
+	await insertUsers(db);
+	console.log("Inserting posts");
+	await insertPosts(db);
+	console.log("Inserting images");
+	await insertImages(db);
+	console.log("Inserting likes");
+	await insertLikes(db);
+	console.log("Inserting comments");
+	await insertComments(db);
+}
 
 async function connectAndMigrate() {
 	// Creating a temporary db to connect as we cannot drop the db which is currently in use
@@ -168,6 +180,18 @@ async function connectAndMigrate() {
 	await sql.unsafe(`CREATE DATABASE "${env.DEV_DB_NAME}"`);
 	console.log("Database created");
 	await sql.end();
+	sql = postgres({
+		database: env.DEV_DB_NAME,
+		host: env.DB_HOST,
+		port: env.DB_PORT,
+		username: env.DB_USER,
+		password: env.DB_PASS
+	});
+	const db = drizzle(sql, { schema });
+	console.log("Migrating database");
+	await migrate(db, { migrationsFolder: "./migrations" });
+	console.log("Database migrated");
+	sql.end();
 }
 async function connectDB() {
 	console.log("Connecting to database");
@@ -280,25 +304,23 @@ function generatePostString(userId: string) {
 	return { str, imageIds, ids };
 }
 
-async function generateLikesAndComments(postIds: string[], userIds: string[]) {
-	const wl = fs.createWriteStream(likesFile, { flags: "w" });
-	wl.write("id,user_id,post_id,created_at,updated_at\n");
-	const wc = fs.createWriteStream(commentsFile, { flags: "w" });
-	wc.write("id,user_id,post_id,content,created_at,updated_at\n");
+async function generateLikesAndComment(postIds: string[], userIds: string[]) {
+	fs.writeFileSync(likesFile, "id,user_id,post_id,created_at,updated_at\n");
+	fs.writeFileSync(commentsFile, "id,user_id,post_id,content,created_at,updated_at\n");
 	let likesCount = 0;
 	let commentsCount = 0;
-	for (const postId of postIds) {
-		likesCount += await generateLikeForUsers(wl, postId, userIds);
-		commentsCount += await generateCommentForUsers(wc, postId, userIds);
-		if (likesCount % 1e4 === 0) {
-			console.log(`current progress ${likesCount} likes`);
-			console.log(`current progress ${commentsCount} comments`);
-		}
+	while (postIds.length) {
+		const postId = postIds.shift()!;
+		const ln =
+			Math.floor(Math.random() * (likesPerPost.max - likesPerPost.min + 1)) + likesPerPost.min;
+		likesCount += await generateLikeForUsers(postId, userIds, ln);
+		const cn =
+			Math.floor(Math.random() * (commentsPerPost.max - commentsPerPost.min + 1)) +
+			commentsPerPost.min;
+		commentsCount += await generateCommentForUsers(postId, userIds, cn);
 	}
 	console.log(`${likesCount} likes generated`);
 	console.log(`${commentsCount} comments generated`);
-	wl.close();
-	wc.close();
 }
 
 function generateImages(ref_ids: string[], type: "profile" | "post") {
@@ -336,21 +358,21 @@ function generateImageString(ref_id: string, type: "profile" | "post") {
 	return `${id},${type},${url},${public_id},${ref_id},${date},${date}\n`;
 }
 
-async function generateLikeForUsers(w: fs.WriteStream, post_id: string, user_ids: string[]) {
+async function generateLikeForUsers(post_id: string, user_ids: string[], n: number) {
+	const w = fs.createWriteStream(likesFile, { flags: "a" });
 	let i = 0;
 	let likesCount = 0;
+	const users = [] as string[];
 	return new Promise<number>((resolve, reject) => {
 		function write() {
 			let canWrite = true;
-			while (canWrite && i < user_ids.length) {
-				if (Math.random() < chanceofLike) {
-					const str = generateLikeString(post_id, user_ids[i]!);
-					canWrite = w.write(str);
-					++likesCount;
-				}
+			while (canWrite && i < n) {
+				const str = generateLikeString(post_id, getUser());
+				canWrite = w.write(str);
+				++likesCount;
 				++i;
 			}
-			if (i < user_ids.length) {
+			if (i < n) {
 				w.once("drain", write);
 			} else {
 				w.close();
@@ -359,6 +381,15 @@ async function generateLikeForUsers(w: fs.WriteStream, post_id: string, user_ids
 		w.on("close", () => resolve(likesCount));
 		w.on("error", reject);
 		write();
+
+		function getUser() {
+			const user = user_ids[Math.floor(Math.random() * user_ids.length)]!;
+			if (users.includes(user)) {
+				return getUser();
+			}
+			users.push(user);
+			return user;
+		}
 	});
 }
 
@@ -368,21 +399,23 @@ function generateLikeString(post_id: string, user_id: string) {
 	return `${id},${user_id},${post_id},${date}\n`;
 }
 
-function generateCommentForUsers(w: fs.WriteStream, post_id: string, user_ids: string[]) {
+function generateCommentForUsers(post_id: string, user_ids: string[], n: number) {
+	const w = fs.createWriteStream(commentsFile, { flags: "a" });
 	let i = 0;
 	let commentsCount = 0;
 	return new Promise<number>((resolve, reject) => {
 		function write() {
 			let canWrite = true;
-			while (canWrite && i < user_ids.length) {
-				if (Math.random() < chanceOfComment) {
-					const str = generateCommentString(post_id, user_ids[i]!);
-					canWrite = w.write(str);
-					++commentsCount;
-				}
+			while (canWrite && i < n) {
+				const str = generateCommentString(
+					post_id,
+					user_ids[Math.floor(Math.random() * user_ids.length)]!
+				);
+				canWrite = w.write(str);
+				++commentsCount;
 				++i;
 			}
-			if (i < user_ids.length) {
+			if (i < n) {
 				w.once("drain", write);
 			} else {
 				w.close();
@@ -565,7 +598,17 @@ async function insertLikes(db: Awaited<ReturnType<typeof connectDB>>) {
 
 			if (likes.length >= dbWriteBatchSize) {
 				rl.pause();
-				await db.insert(schema.likesTable).values(likes.splice(0, dbWriteBatchSize));
+				try {
+					await db
+						.insert(schema.likesTable)
+						.values(likes.splice(0, dbWriteBatchSize))
+						.onConflictDoNothing({
+							target: [schema.likesTable.user_id, schema.likesTable.post_id]
+						});
+				} catch (error) {
+					console.log(error);
+					console.log("continuing");
+				}
 				rl.resume();
 			}
 		});

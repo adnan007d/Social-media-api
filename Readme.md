@@ -50,8 +50,6 @@ Seeding will create a user and a post for testing purposes the password for the 
 
 > Note: Seeding will delete all the data in the database and create new data
 
-Seeding will take some time as it is creating a `lot` of data, usually `5-10 minutes`
-
 Just for the fun I will also be creating a frontend for this project
 Will recreate this in Golang too
 
