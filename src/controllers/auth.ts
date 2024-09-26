@@ -1,33 +1,28 @@
-import db from "@/db";
-import { usersTable } from "@/db/schema";
+import { insertUserInDB, selectUserByEmail } from "@/util/db";
 import { generateTokens } from "@/util/jwt";
 import logger from "@/util/logger";
 import { dbQueue } from "@/util/queue";
 import { APIError, comparePassword, hashPassword } from "@/util/util";
-import { signInSchema, type SignUpBody } from "@/util/validations";
-import { eq } from "drizzle-orm";
+import { signInSchema } from "@/util/validations";
 import type { Request, Response, NextFunction } from "express";
 import { PostgresError } from "postgres";
 
 export async function signUp(req: Request, res: Response, next: NextFunction) {
-	const body: SignUpBody = req.body;
-
+	const body = req.body;
 	body.password = await hashPassword(body.password);
+
 	try {
-		const result = await db
-			.insert(usersTable)
-			.values(body)
-			.returning({
-				id: usersTable.id,
-				email: usersTable.email,
-				username: usersTable.username
-			})
-			.execute();
+		const [user] = await insertUserInDB(body);
+
+		if (!user) {
+			delete body.password;
+			logger.error({ user: body }, "User not created");
+			return next(new APIError(400, "Bad Request"));
+		}
 
 		// TODO: Send verification mail
-
 		return res.status(201).json({
-			id: result[0]?.id,
+			id: user?.id,
 			message: "User created successfully"
 		});
 	} catch (error) {
@@ -52,7 +47,12 @@ export async function signIn(req: Request, res: Response, next: NextFunction) {
 	try {
 		const body = await validateSignInBody(req.body);
 
-		const user = await findUser(body.email);
+		const user = await selectUserByEmail(body.email);
+
+		if (!user) {
+			logger.error({ err: body.email }, "User not found");
+			throw new APIError(401, "Invalid email/password");
+		}
 
 		if (!(await comparePassword(body.password, user.password))) {
 			logger.error({ err: body.email }, "Invalid password");
@@ -82,6 +82,8 @@ export async function signIn(req: Request, res: Response, next: NextFunction) {
 	}
 }
 
+// This is because I want to send Invalid email/password message
+// Even if the validation is failing for security purpose
 async function validateSignInBody(body: unknown) {
 	const parsedBody = signInSchema.safeParse(body);
 	if (!parsedBody.success) {
@@ -89,18 +91,6 @@ async function validateSignInBody(body: unknown) {
 		throw new APIError(401, "Invalid email/password");
 	}
 	return parsedBody.data;
-}
-
-async function findUser(email: string) {
-	const user = await db.query.usersTable.findFirst({
-		columns: { id: true, email: true, role: true, password: true },
-		where: eq(usersTable.email, email)
-	});
-	if (!user) {
-		logger.error({ err: email }, "User not found");
-		throw new APIError(401, "Invalid email/password");
-	}
-	return user;
 }
 
 async function rotateRefreshToken(req: Request, newRefreshToken: string, userId: string) {

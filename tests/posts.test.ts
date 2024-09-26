@@ -94,7 +94,6 @@ describe("posts", async () => {
 	});
 
 	it("update post", async () => {
-		console.log(postId);
 		await inject(app)
 			.patch(`/posts/${postId}`)
 			.body({ content: "Hello World Updated" })

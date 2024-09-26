@@ -6,12 +6,12 @@ Implements all the necessary bits and pieces of fundamental backend development
 I made That will give you a good idea of what I am trying to achieve with this project.
 It also has a lot of information about the design decisions I made.**
 
--   [x] Users
--   [x] Images
--   [x] Posts
--   [x] Likes
--   [x] Comments
--   [ ] Notifications
+- [x] Users
+- [x] Images
+- [x] Posts
+- [x] Likes
+- [x] Comments
+- [ ] Notifications
 
 Before running the project make sure to create a `.env` file in the root directory with the required environment variables. refer to the `.env.example` file for the required variables.
 
@@ -19,8 +19,8 @@ Note: There are separate DB_NAME for testing and development. Make sure to creat
 
 Requirements:
 
--   Postgres
--   Redis
+- Postgres
+- Redis
 
 If you are using docker you can use the following command to start the required services
 
@@ -57,29 +57,29 @@ Will recreate this in Golang too
 
 Authentication:
 
--   Signup: `POST /auth/signup`
--   Signin: `POST /auth/signin`
+- Signup: `POST /auth/signup`
+- Signin: `POST /auth/signin`
 
 Users:
 
--   Get Me: `GET /users/me`
--   Update Me: `PATCH /users/me`
+- Get Me: `GET /users/me`
+- Update Me: `PATCH /users/me`
 
 Posts:
 
--   Get All Posts: `GET /posts`
--   Create Post: `POST /posts`
--   Get Post: `GET /posts/:id`
--   Update Post: `PATCH /posts/:id`
--   Delete Post: `DELETE /posts/:id`
+- Get All Posts: `GET /posts`
+- Create Post: `POST /posts`
+- Get Post: `GET /posts/:id`
+- Update Post: `PATCH /posts/:id`
+- Delete Post: `DELETE /posts/:id`
 
 Likes:
 
--   Like Post: `POST /likes/:postId`
--   Unlike Post: `DELETE /likes/:postId`
+- Like Post: `POST /likes/:postId`
+- Unlike Post: `DELETE /likes/:postId`
 
 Comments:
 
--   Get Comments: `GET /comments/:postId`
--   Create Comment: `POST /comments/:postId`
--   delete Comment: `DELETE /comments/:commentId`
+- Get Comments: `GET /comments/:postId`
+- Create Comment: `POST /comments/:postId`
+- delete Comment: `DELETE /comments/:commentId`

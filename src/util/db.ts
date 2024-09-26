@@ -8,12 +8,49 @@ import {
 	refreshTokensTable,
 	usersTable
 } from "@/db/schema";
-import { eq, sql, desc, count, and } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 import logger from "./logger";
 import redis from "@/util/redis";
-import { type CommentBody, type PaginationQuery, type PostQuery } from "./validations";
-import { aliasedTable } from "drizzle-orm";
+import type { PostCreateBody, CommentBody, PaginationQuery, PostQuery } from "./validations";
 import env from "@/env";
+
+// --- Users ---
+
+export async function selectUserById(id: string) {
+	return await db.execute(sql`
+SELECT u.id, u.email, u.role, u.email_verified, i.url
+FROM users u
+LEFT JOIN LATERAL (
+    SELECT url
+    FROM images
+    WHERE ref_id = u.id
+      AND type = 'profile'
+    ORDER BY created_at DESC
+    LIMIT 1
+) i ON true
+WHERE u.id = ${id}`);
+}
+
+export async function updateUserInDB(
+	user_id: string,
+	data: Partial<typeof usersTable.$inferInsert>
+) {
+	return await db.update(usersTable).set(data).where(eq(usersTable.id, user_id));
+}
+
+export async function insertUserInDB(data: typeof usersTable.$inferInsert) {
+	return await db
+		.insert(usersTable)
+		.values(data)
+		.returning({ id: usersTable.id, username: usersTable.username });
+}
+
+export async function selectUserByEmail(email: string) {
+	return await db.query.usersTable.findFirst({
+		columns: { id: true, email: true, role: true, password: true },
+		where: eq(usersTable.email, email)
+	});
+}
 
 export async function rotateRefreshTokenInDB(values: InsertRefreshToken, old?: string) {
 	// If old refresh token is provided, delete
@@ -65,37 +102,37 @@ export async function deleteOldProfileImages(ref_id: string) {
 	}
 }
 
-export async function getPostFromDB(postId: string) {
+export async function selectPostFromDB(postId: string) {
 	const posts = await redis.get(`posts:${postId}`);
 	if (posts) {
 		return JSON.parse(posts);
 	}
 
-	const userImageTable = aliasedTable(imagesTable, "user_image");
-	const [result] = await db
-		.select({
-			id: postsTable.id,
-			user_id: postsTable.user_id,
-			content: postsTable.content,
-			created_at: postsTable.created_at,
-			updated_at: postsTable.updated_at,
-			likes: count(likesTable.id).mapWith(Number).as("likes"),
-			comments: count(commentTable.id).mapWith(Number).as("comments"),
-			image: imagesTable.url,
-			username: usersTable.username,
-			user_profile: userImageTable.url
-		})
-		.from(postsTable)
-		.where(eq(postsTable.id, postId))
-		.innerJoin(usersTable, eq(postsTable.user_id, usersTable.id))
-		.leftJoin(imagesTable, and(eq(imagesTable.type, "post"), eq(imagesTable.ref_id, postsTable.id)))
-		.leftJoin(
-			userImageTable,
-			and(eq(userImageTable.type, "profile"), eq(userImageTable.ref_id, postsTable.user_id))
-		)
-		.leftJoin(likesTable, eq(postsTable.id, likesTable.post_id))
-		.leftJoin(commentTable, eq(postsTable.id, commentTable.post_id))
-		.groupBy(postsTable.id, imagesTable.url, usersTable.username, userImageTable.url);
+	const [result] = await db.execute(sql`
+SELECT
+    p.id as id, p.content as content,
+    (p.updated_at > p.created_at) as "edited",
+    p.created_at as created_at,
+    pi.url as "image",
+    u.username, ui.url as "user_profile",
+    (SELECT count(*) FROM likes WHERE post_id = p.id)::int as "likes",
+    (SELECT count(*) FROM comments WHERE post_id = p.id)::int as "comments"
+FROM
+posts p
+INNER JOIN users u on p.user_id = u.id
+LEFT JOIN LATERAL (
+        SELECT url FROM images
+        WHERE ref_id = p.id AND type = 'post'
+        ORDER BY created_at DESC
+        LIMIT 1
+) as pi ON true
+LEFT JOIN LATERAL (
+        SELECT url FROM images
+        WHERE ref_id = p.user_id AND type = 'profile'
+        ORDER BY created_at DESC
+        LIMIT 1
+) as ui ON true
+WHERE p.id = ${postId}`);
 
 	if (result) {
 		await redis.set(
@@ -109,7 +146,7 @@ export async function getPostFromDB(postId: string) {
 	return null;
 }
 
-export async function getPostsFromDB(params: PostQuery) {
+export async function selectPostsFromDB(params: PostQuery) {
 	const { limit, offset, user_id } = params;
 
 	const cache = await redis.get(`posts:query:${JSON.stringify(params)}`);
@@ -118,38 +155,36 @@ export async function getPostsFromDB(params: PostQuery) {
 		return JSON.parse(cache);
 	}
 
-	const userImageTable = aliasedTable(imagesTable, "user_image");
-
-	const query = db
-		.select({
-			id: postsTable.id,
-			user_id: postsTable.user_id,
-			content: postsTable.content,
-			created_at: postsTable.created_at,
-			updated_at: postsTable.updated_at,
-			likes: count(likesTable.id).mapWith(Number).as("likes"),
-			comments: count(commentTable.id).mapWith(Number).as("comments"),
-			image: imagesTable.url,
-			username: usersTable.username,
-			user_profile: userImageTable.url
-		})
-		.from(postsTable)
-		.innerJoin(usersTable, eq(postsTable.user_id, usersTable.id))
-		.leftJoin(imagesTable, and(eq(imagesTable.type, "post"), eq(imagesTable.ref_id, postsTable.id)))
-		.leftJoin(
-			userImageTable,
-			and(eq(userImageTable.type, "profile"), eq(userImageTable.ref_id, postsTable.user_id))
-		)
-		.leftJoin(likesTable, eq(postsTable.id, likesTable.post_id))
-		.leftJoin(commentTable, eq(postsTable.id, commentTable.post_id))
-		.groupBy(postsTable.id, imagesTable.url, usersTable.username, userImageTable.url)
-		.orderBy(desc(postsTable.created_at))
-		.limit(limit)
-		.offset(offset);
-	if (user_id) {
-		query.where(eq(postsTable.user_id, user_id));
-	}
-	const result = await query.execute();
+	const result = await db.execute(sql`
+SELECT
+    p.id as id, p.content as content,
+    (p.updated_at > p.created_at) as "edited",
+    p.created_at as "created_at",
+    pi.url as "image",
+    u.username as usename,
+    ui.url as "user_profile",
+    (SELECT count(*) FROM likes WHERE post_id = p.id)::int as "likes",
+    (SELECT count(*) FROM comments WHERE post_id = p.id)::int as "comments"
+FROM
+posts p
+INNER JOIN users u on p.user_id = u.id
+LEFT JOIN LATERAL (
+        SELECT url FROM images
+        WHERE ref_id = p.id AND type = 'post'
+        ORDER BY created_at DESC
+        LIMIT 1
+) as pi ON true
+LEFT JOIN LATERAL (
+        SELECT url FROM images
+        WHERE ref_id = p.user_id AND type = 'profile'
+        ORDER BY created_at DESC
+        LIMIT 1
+) as ui ON true
+${user_id ? sql`WHERE p.user_id = ${user_id}` : sql``}
+ORDER BY p.created_at DESC
+OFFSET ${offset}
+LIMIT ${limit};
+`);
 
 	if (result) {
 		await redis.set(
@@ -162,13 +197,72 @@ export async function getPostsFromDB(params: PostQuery) {
 	return result;
 }
 
+export async function insertPostInDB(body: PostCreateBody, userId: string) {
+	const [post] = await db
+		.insert(postsTable)
+		.values({ ...body, user_id: userId })
+		.returning({
+			id: postsTable.id,
+			content: postsTable.content,
+			user_id: postsTable.user_id
+		});
+
+	return post;
+}
+
+export async function updatePostInDB(body: PostCreateBody, userId: string, postId: string) {
+	if (Object.keys(body).length === 0) {
+		return { id: postId, user_id: userId };
+	}
+
+	const [post] = await db
+		.update(postsTable)
+		.set(body)
+		.where(and(eq(postsTable.id, postId), eq(postsTable.user_id, userId)))
+		.returning({
+			id: postsTable.id,
+			content: postsTable.content,
+			user_id: postsTable.user_id
+		})
+		.execute();
+	return post;
+}
+
+export async function deletePostInDB(post_id: string, user_id: string) {
+	return await db
+		.delete(postsTable)
+		.where(and(eq(postsTable.id, post_id), eq(postsTable.user_id, user_id)))
+		.returning({
+			id: postsTable.id
+		})
+		.execute();
+}
+
+// ---- Images ----
+
+export async function insertImageInDB(data: typeof imagesTable.$inferInsert) {
+	return await db.insert(imagesTable).values(data).returning({ id: imagesTable.id });
+}
+
+export async function updateImageInDB(
+	post_id: string,
+	data: Partial<typeof imagesTable.$inferInsert>
+) {
+	return await db
+		.update(imagesTable)
+		.set(data)
+		.where(eq(imagesTable.ref_id, post_id))
+		.returning({ id: imagesTable.id });
+}
+
+// ---- Comments ----
 type CreateCommentInDB = {
 	body: CommentBody;
 	user_id: string;
 	post_id: string;
 };
 
-export async function createCommentInDB(params: CreateCommentInDB) {
+export async function insertCommentInDB(params: CreateCommentInDB) {
 	const { body, user_id, post_id } = params;
 	const [comment] = await db
 		.insert(commentTable)
@@ -201,7 +295,7 @@ RETURNING ${commentTable.id}
 	return comment;
 }
 
-export async function getCommentsForPostDB(postId: string, params: PaginationQuery) {
+export async function selectCommentsForPostDB(postId: string, params: PaginationQuery) {
 	const { limit, offset } = params;
 
 	const redisKey = `comments:${postId}:${JSON.stringify(params)}`;
@@ -220,8 +314,8 @@ export async function getCommentsForPostDB(postId: string, params: PaginationQue
 			content: commentTable.content,
 			username: usersTable.username,
 			user_profile: imagesTable.url,
-			created_at: commentTable.created_at,
-			updated_at: commentTable.updated_at
+			edited: sql`(${commentTable.updated_at} > ${commentTable.created_at})`,
+			created_at: commentTable.created_at
 		})
 		.from(commentTable)
 		.where(eq(commentTable.post_id, postId))
@@ -241,4 +335,26 @@ export async function getCommentsForPostDB(postId: string, params: PaginationQue
 	}
 
 	return comments;
+}
+
+// ---- Likes ----
+
+export async function insertLike(post_id: string, user_id: string) {
+	return await db
+		.insert(likesTable)
+		.values({
+			user_id,
+			post_id
+		})
+		.onConflictDoNothing({
+			target: [likesTable.user_id, likesTable.post_id]
+		});
+}
+
+export async function deleteLike(post_id: string, user_id: string) {
+	return await db
+		.delete(likesTable)
+		.where(and(eq(likesTable.user_id, user_id), eq(likesTable.post_id, post_id)))
+		.returning({ id: likesTable.id })
+		.execute();
 }

@@ -1,4 +1,4 @@
-import { createCommentInDB, deleteCommentInDB, getCommentsForPostDB } from "@/util/db";
+import { insertCommentInDB, deleteCommentInDB, selectCommentsForPostDB } from "@/util/db";
 import { APIError } from "@/util/util";
 import { paginationQuerySchema, type CommentBody } from "@/util/validations";
 import type { Request, Response, NextFunction } from "express";
@@ -9,7 +9,7 @@ export async function postComment(req: Request, res: Response, next: NextFunctio
 		const user = req.user as NonNullable<Request["user"]>;
 		const post_id = z.string().uuid().parse(req.params.postId);
 		const body = req.body as CommentBody;
-		const comment = await createCommentInDB({ body, user_id: user.id, post_id });
+		const comment = await insertCommentInDB({ body, user_id: user.id, post_id });
 		if (!comment) {
 			return next(new APIError(404, "Post not found"));
 		}
@@ -39,7 +39,7 @@ export async function getCommentsForPost(req: Request, res: Response, next: Next
 	try {
 		const post_id = z.string().uuid().parse(req.params.postId);
 		const query = paginationQuerySchema.parse(req.query);
-		const comments = await getCommentsForPostDB(post_id, query);
+		const comments = await selectCommentsForPostDB(post_id, query);
 
 		return res.status(200).json(comments);
 	} catch (error) {

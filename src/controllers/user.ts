@@ -1,35 +1,17 @@
-import db from "@/db";
-import { imagesTable, usersTable } from "@/db/schema";
+import { type InsertUser } from "@/db/schema";
 import { uploadStream } from "@/util/cloudinary";
+import { insertImageInDB, selectUserById, updateImageInDB } from "@/util/db";
 import logger from "@/util/logger";
 import { deleteOldProfileImagesQueue } from "@/util/queue";
 import { APIError } from "@/util/util";
 import { type UserUpdateBody } from "@/util/validations";
-import { eq, desc, and } from "drizzle-orm";
 import type { Response, NextFunction, Request } from "express";
 import { PostgresError } from "postgres";
 
 export async function getMe(req: Request, res: Response, next: NextFunction) {
 	const reqUser = req.user as NonNullable<Request["user"]>;
 	try {
-		const user = await db
-			.select({
-				id: usersTable.id,
-				email: usersTable.email,
-				username: usersTable.username,
-				role: usersTable.role,
-				email_verified: usersTable.email_verified,
-				imageUrl: imagesTable.url
-			})
-			.from(usersTable)
-			.where(eq(usersTable.id, reqUser.id))
-			.leftJoin(
-				imagesTable,
-				and(eq(imagesTable.ref_id, usersTable.id), eq(imagesTable.type, "profile"))
-			)
-			.orderBy(desc(imagesTable.created_at))
-			.limit(1);
-
+		const user = await selectUserById(reqUser.id);
 		return res.json(user[0]);
 	} catch (error) {
 		return next(error);
@@ -42,7 +24,7 @@ export async function updateMe(req: Request, res: Response, next: NextFunction) 
 
 		const body = req.body as UserUpdateBody;
 
-		const updates: Partial<typeof usersTable.$inferInsert> = {};
+		const updates: Partial<InsertUser> = {};
 
 		// If username exists update it
 		if (body.username) {
@@ -56,26 +38,21 @@ export async function updateMe(req: Request, res: Response, next: NextFunction) 
 				invalidate: true
 			});
 
-			// If image record is not present create it
-			// Update the user record as well
-			await db
-				.insert(imagesTable)
-				.values({
-					public_id: imageData.public_id,
-					url: imageData.url,
-					ref_id: user.id,
-					type: "profile"
-				})
-				.returning({
-					id: imagesTable.id
-				});
+			await insertImageInDB({
+				public_id: imageData.public_id,
+				url: imageData.url,
+				ref_id: user.id,
+				type: "profile"
+			});
 			imageUrl = imageData.url;
 
 			deleteOldProfileImagesQueue.createJob(user.id).save();
-
-			await db.update(usersTable).set(updates).where(eq(usersTable.id, user.id));
 		}
 
+		// only update image if it has changed
+		if (Object.keys(updates).length > 0) {
+			await updateImageInDB(user.id, updates);
+		}
 		return res.json({
 			username: body.username,
 			imageUrl: imageUrl
