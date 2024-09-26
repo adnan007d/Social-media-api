@@ -2,7 +2,7 @@ import { insertUserInDB, selectUserByEmail } from "@/util/db";
 import { generateTokens } from "@/util/jwt";
 import logger from "@/util/logger";
 import { dbQueue } from "@/util/queue";
-import { APIError, comparePassword, hashPassword } from "@/util/util";
+import { APIError, comparePassword, COOKIE_OPTIONS, hashPassword } from "@/util/util";
 import { signInSchema } from "@/util/validations";
 import type { Request, Response, NextFunction } from "express";
 import { PostgresError } from "postgres";
@@ -63,11 +63,7 @@ export async function signIn(req: Request, res: Response, next: NextFunction) {
 
 		await rotateRefreshToken(req, refreshToken, user.id);
 
-		res.cookie("refreshToken", refreshToken, {
-			httpOnly: true,
-			sameSite: "lax",
-			secure: process.env.NODE_ENV === "production"
-		});
+		res.cookie("refreshToken", refreshToken, COOKIE_OPTIONS);
 
 		return res.status(200).json({
 			accessToken,

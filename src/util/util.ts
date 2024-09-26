@@ -1,5 +1,6 @@
 import type { inferFormattedError } from "zod";
 import bcryt from "bcrypt";
+import { type CookieOptions } from "express";
 
 export class APIError extends Error {
 	constructor(
@@ -21,3 +22,10 @@ export async function hashPassword(password: string) {
 export async function comparePassword(password: string, hash: string) {
 	return bcryt.compare(password, hash);
 }
+
+export const COOKIE_OPTIONS: CookieOptions = {
+	httpOnly: true,
+	sameSite: "strict",
+	secure: process.env.NODE_ENV === "production",
+	maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
+};

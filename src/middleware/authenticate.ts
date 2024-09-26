@@ -3,7 +3,7 @@ import { refreshTokensTable } from "@/db/schema";
 import { generateTokens, safeVerifyAccessToken, verifyRefreshToken } from "@/util/jwt";
 import logger from "@/util/logger";
 import { dbQueue } from "@/util/queue";
-import { APIError } from "@/util/util";
+import { APIError, COOKIE_OPTIONS } from "@/util/util";
 import { and, eq } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import { type JWTPayload } from "jose";
@@ -97,11 +97,7 @@ async function refreshTokens(req: Request, res: Response, payload: JWTPayload) {
 		.save();
 
 	res.setHeader("Authorization", `Bearer ${accessToken}`);
-	res.cookie("refreshToken", refreshToken, {
-		httpOnly: true,
-		sameSite: "lax",
-		secure: process.env.NODE_ENV === "production"
-	});
+	res.cookie("refreshToken", refreshToken, COOKIE_OPTIONS);
 
 	handleValidToken(req, payload);
 }
