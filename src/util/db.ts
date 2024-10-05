@@ -18,7 +18,9 @@ import env from "@/env";
 
 export async function selectUserById(id: string) {
 	return await db.execute(sql`
-SELECT u.id, u.email, u.role, u.email_verified, i.url
+SELECT u.id, u.email, u.role,
+      u.username,
+      u.email_verified, i.url as "image"
 FROM users u
 LEFT JOIN LATERAL (
     SELECT url
