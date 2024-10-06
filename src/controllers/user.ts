@@ -1,6 +1,6 @@
 import { type InsertUser } from "@/db/schema";
 import { uploadStream } from "@/util/cloudinary";
-import { insertImageInDB, selectUserById, updateImageInDB } from "@/util/db";
+import { insertImageInDB, selectUserById, updateUserInDB } from "@/util/db";
 import logger from "@/util/logger";
 import { deleteOldProfileImagesQueue } from "@/util/queue";
 import { APIError } from "@/util/util";
@@ -51,7 +51,7 @@ export async function updateMe(req: Request, res: Response, next: NextFunction) 
 
 		// only update image if it has changed
 		if (Object.keys(updates).length > 0) {
-			await updateImageInDB(user.id, updates);
+			await updateUserInDB(user.id, updates);
 		}
 		return res.json({
 			username: body.username,

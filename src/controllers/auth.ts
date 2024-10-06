@@ -1,4 +1,4 @@
-import { insertUserInDB, selectUserByEmail } from "@/util/db";
+import { deleteOldRefreshTokens, insertUserInDB, selectUserByEmail } from "@/util/db";
 import { generateTokens } from "@/util/jwt";
 import logger from "@/util/logger";
 import { dbQueue } from "@/util/queue";
@@ -101,4 +101,15 @@ async function rotateRefreshToken(req: Request, newRefreshToken: string, userId:
 			oldRefreshToken
 		])
 		.save();
+}
+
+export async function logout(req: Request, res: Response) {
+	const refreshToken = req.cookies.refreshToken;
+	if (!refreshToken) {
+		return res.status(200).json({ message: "Logged out successfully" });
+	}
+
+	await deleteOldRefreshTokens(refreshToken, req.user!.id);
+	res.clearCookie("refreshToken");
+	return res.status(200).json({ message: "Logged out successfully" });
 }

@@ -54,11 +54,9 @@ export async function selectUserByEmail(email: string) {
 	});
 }
 
-export async function rotateRefreshTokenInDB(values: InsertRefreshToken, old?: string) {
+export async function rotateRefreshTokenInDB(values: InsertRefreshToken, old_token?: string) {
 	// If old refresh token is provided, delete
-	const deletePromise = old
-		? db.delete(refreshTokensTable).where(eq(refreshTokensTable.refresh_token, old))
-		: undefined;
+	const deletePromise = old_token ? deleteOldRefreshTokens(old_token, values.user_id) : undefined;
 
 	const [_, insertSetteled] = await Promise.allSettled([
 		deletePromise,
@@ -72,6 +70,14 @@ export async function rotateRefreshTokenInDB(values: InsertRefreshToken, old?: s
 	if (insertSetteled.status === "rejected") {
 		logger.error(insertSetteled.reason);
 	}
+}
+
+export async function deleteOldRefreshTokens(old_token: string, user_id: string) {
+	await db
+		.delete(refreshTokensTable)
+		.where(
+			and(eq(refreshTokensTable.refresh_token, old_token), eq(refreshTokensTable.user_id, user_id))
+		);
 }
 
 export async function deleteOldProfileImages(ref_id: string) {
